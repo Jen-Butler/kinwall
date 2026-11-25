@@ -22,6 +22,14 @@ export function choreOrder<C extends { dueTime: string | null; completed: boolea
   return list.map((c, i) => ({ c, i })).sort((a, b) => ticked(a.c) - ticked(b.c) || (a.c.sort ?? 0) - (b.c.sort ?? 0) || (ticked(a.c) ? 0 : time(a.c).localeCompare(time(b.c))) || a.i - b.i).map(x => x.c)
 }
 
+/** Keep each category's chores together: uncategorized first (they have no heading), then categories
+ * in the order they first appear. The order within a category is unchanged. */
+export function groupByCategory<C>(list: C[], categoryOf: (c: C) => string): C[] {
+  const rank = new Map<string, number>([['', 0]])
+  for (const c of list) { const k = categoryOf(c); if (!rank.has(k)) rank.set(k, rank.size) }
+  return list.map((c, i) => ({ c, i })).sort((a, b) => rank.get(categoryOf(a.c))! - rank.get(categoryOf(b.c))! || a.i - b.i).map(x => x.c)
+}
+
 /** Whether a tick waits for a parent's OK (as the server decides): never from a parent's device;
  * otherwise an activity chore whose activity is gone always does, else the chore's own setting or
  * its person's. */
