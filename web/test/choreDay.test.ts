@@ -40,8 +40,8 @@ test('manual order takes priority over start times and preserves done chores at 
   assert.deepEqual(choreOrder([c('Early', 2, '08:00'), c('First', 1, null), c('Done', 0, null, true)]).map(x => x.title), ['First', 'Early', 'Done'])
 })
 
-test('groupByCategory keeps a category together without reordering inside it', () => {
+test('groupByCategory keeps a category together, categories in alphabetical order, without reordering inside one', () => {
   const c = (title: string, category: string) => ({ title, category })
-  const grouped = groupByCategory([c('Dishes', 'Home'), c('Feed dogs', 'Pets'), c('Water plants', ''), c('Trash', 'Home'), c('Walk dogs', 'Pets')], x => x.category)
-  assert.deepEqual(grouped.map(x => x.title), ['Water plants', 'Dishes', 'Trash', 'Feed dogs', 'Walk dogs'])
+  const grouped = groupByCategory([c('Feed dogs', 'Pets'), c('Dishes', 'Home'), c('Water plants', ''), c('Walk dogs', 'Pets'), c('Make bed', 'Bedroom'), c('Trash', 'Home')], x => x.category)
+  assert.deepEqual(grouped.map(x => x.title), ['Water plants', 'Make bed', 'Dishes', 'Trash', 'Feed dogs', 'Walk dogs'])
 })
