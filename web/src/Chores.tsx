@@ -41,7 +41,7 @@ import { NOT_NOW, suggestionDetails } from './choreSuggest.ts'
 import { shareText } from './rewardSplit.ts'
 import { awayUntil } from './away.ts'
 import type { AwayPeriod } from './trip-types.ts'
-import { choreOrder, earnedText, isLate, pointsEarned, pointsGivenOut, waitsForOk } from './choreDay.ts'
+import { choreOrder, earnedText, groupByCategory, isLate, pointsEarned, pointsGivenOut, waitsForOk } from './choreDay.ts'
 import { latestOnly } from './latest.ts'
 import { onDayChange, rollToToday } from './minuteTick.ts'
 import { DAY, formatDate, intlLocale, LONG_DAY, msg, t, tn, tm } from './i18n.ts'
@@ -759,7 +759,7 @@ export default function Chores() {
         <div className="chore-columns" style={columnsGridStyle}>
           {active.map(col => {
             const columnChores = chores.filter(c => inCategory(c) && (col.id === '__anyone' ? inAnyone(c) : c.memberId === col.id))
-            const list = editing ? [...columnChores].sort((a, b) => a.sort - b.sort) : choreOrder(columnChores)
+            const list = editing ? [...columnChores].sort((a, b) => a.sort - b.sort) : groupByCategory(choreOrder(columnChores), choreCategory)
             const groups = schoolworkGroups(list)
             const required = list.filter(c => !c.ongoing)
             const done = required.filter(c => c.completed || c.goalProgress?.full).length
@@ -784,7 +784,7 @@ export default function Chores() {
                       onDragEnd={() => { draggedChore.current = null }}
                       onDragOver={e => { if (canOrder && draggedChore.current && movable.some(x => x.id === draggedChore.current)) e.preventDefault() }}
                       onDrop={e => { e.preventDefault(); const from = draggedChore.current; draggedChore.current = null; if (canOrder && from) void reorder(movable, from, c.id) }}>
-                      {(!group.schoolwork || row === 0) && choreCategory(c) && <span className="chore-category-name">{choreCategory(c)}</span>}
+                      {(row === 0 || choreCategory(group.chores[row - 1]) !== choreCategory(c)) && choreCategory(c) && <span className="chore-category-name">{choreCategory(c)}</span>}
                       <ChoreCard chore={c} editing={editing && parentDevice && !c.sourceId} late={!c.ongoing && isToday && isLate(c.dueTime, now)} onToggle={() => toggle(c)} onEdit={() => { if (parentDevice && !c.sourceId) { if (c.schoolKind) setSchoolwork(c); else setEditChore(c) } }}
                         onNotDone={markable(c) ? () => void setNotDone(c, !c.dismissed) : undefined} />
                       {canOrder && <div className="chore-order-actions">

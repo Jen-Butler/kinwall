@@ -1,7 +1,7 @@
 // node --test test/ (npm test). A day of chores: whose points they are, and the order a column reads in.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { choreOrder, earnedText, isLate, pointsEarned, pointsGivenOut, waitsForOk } from '../src/choreDay.ts'
+import { choreOrder, earnedText, groupByCategory, isLate, pointsEarned, pointsGivenOut, waitsForOk } from '../src/choreDay.ts'
 
 const done = (points: number, memberId: string | null, completedBy: string | null, completed = true) => ({ points, memberId, completedBy, completed })
 
@@ -38,4 +38,10 @@ test('waitsForOk follows the server: parent devices never, a gone activity alway
 test('manual order takes priority over start times and preserves done chores at the end', () => {
   const c = (title: string, sort: number, dueTime: string | null, completed = false) => ({ title, sort, dueTime, completed })
   assert.deepEqual(choreOrder([c('Early', 2, '08:00'), c('First', 1, null), c('Done', 0, null, true)]).map(x => x.title), ['First', 'Early', 'Done'])
+})
+
+test('groupByCategory keeps a category together, categories in alphabetical order, without reordering inside one', () => {
+  const c = (title: string, category: string) => ({ title, category })
+  const grouped = groupByCategory([c('Feed dogs', 'Pets'), c('Dishes', 'Home'), c('Water plants', ''), c('Walk dogs', 'Pets'), c('Make bed', 'Bedroom'), c('Trash', 'Home')], x => x.category)
+  assert.deepEqual(grouped.map(x => x.title), ['Water plants', 'Make bed', 'Dishes', 'Trash', 'Feed dogs', 'Walk dogs'])
 })
