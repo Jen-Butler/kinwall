@@ -701,6 +701,7 @@ export async function completeChore(c: Context<{ Bindings: Env }>, id: string, d
   if (!chore) return 'not found';
   const away=awayFromResults(awayRes),duty=away.duty(chore,date);
   const originalMember=chore.member_id;
+  if(duty.paused&&!chore.done_by)return {notDue:stored('error','This chore is paused that day.')};
   if(duty.excused&&!chore.done_by)return {notDue:stored('error','This chore is paused while away.')};
   chore.member_id=duty.memberId;
   if(!originalMember&&memberId&&!away.forMember({...chore,member_id:originalMember},date,memberId))return {notDue:stored('error','This chore is for someone at home that day.')};
@@ -715,6 +716,7 @@ export async function completeChore(c: Context<{ Bindings: Env }>, id: string, d
     chore.member_needs_approval=recipient?.needs_approval??null;
   }
   if(duty.handoff&&memberId&&memberId!==duty.memberId)return {blocked:stored('error','This chore has been handed to someone else for that day.')};
+  if(timedPlay&&duty.paused)return {notDue:stored('error','This chore is paused that day.')};
   if(timedPlay&&(duty.excused||!away.forMember({...chore,member_id:originalMember},date,memberId??'')))return {notDue:stored('error','This chore is paused while away.')};
   const blocked = await ownerBlock(c, memberId, chore.member_id, chore.done_by);
   if (blocked) return { blocked };
@@ -1035,5 +1037,64 @@ choresRoutes.openapi(createRoute({
     await c.env.DB.prepare('DELETE FROM chore_dismissals WHERE chore_id = ? AND date = ?').bind(id, date).run();
   }
   await emit(c, 'chore.dismissal.changed', { choreId: id, date, dismissed });
+  return c.json({ ok: true as const }, 200);
+});
+
+// A chore's own break: not due on those days, never late for them and skipped by streaks, with
+// nobody marked away (away.ts treats a paused day as excused). Parent only to add or remove.
+const ChorePauseSchema = z.object({
+  id: z.string(), choreId: z.string(), startDate: MealDateSchema, endDate: MealDateSchema,
+  title: z.string(), emoji: z.string().nullable(), memberId: z.string().nullable().openapi({ description: "The chore's person; null for Anyone." }),
+}).openapi('ChorePause');
+type ChorePauseRow = { id: string; chore_id: string; start_date: string; end_date: string; title: string; emoji: string | null; member_id: string | null };
+const pauseToApi = (r: ChorePauseRow) => ({ id: r.id, choreId: r.chore_id, startDate: r.start_date, endDate: r.end_date, title: r.title, emoji: r.emoji, memberId: r.member_id });
+const CHORE_PAUSE_SELECT = 'SELECT p.id, p.chore_id, p.start_date, p.end_date, c.title, c.emoji, c.member_id FROM chore_pauses p JOIN chores c ON c.id = p.chore_id';
+
+choresRoutes.openapi(createRoute({
+  method: 'get', path: '/api/chores/pauses', tags: ['Chores'], security: [{ Bearer: [] }],
+  summary: 'Chore pauses that touch a range of dates, each with its chore (parent only). A paused chore is not due on those days and is left out of /api/chores/day.',
+  request: { query: z.object({ from: MealDateSchema, to: MealDateSchema }).refine(q => q.to >= q.from, 'choose an ordered range') },
+  responses: { 200: { description: 'pauses, earliest first', content: { 'application/json': { schema: z.array(ChorePauseSchema) } } }, 400: { description: 'invalid range', content: { 'application/json': { schema: ErrorSchema } } } },
+}), async c => {
+  const { from, to } = c.req.valid('query');
+  const { results } = await c.env.DB.prepare(`${CHORE_PAUSE_SELECT} WHERE p.start_date <= ? AND p.end_date >= ? AND c.archived = 0 ORDER BY p.start_date, p.end_date, c.title`).bind(to, from).all<ChorePauseRow>();
+  return c.json(results.map(pauseToApi), 200);
+});
+
+choresRoutes.openapi(createRoute({
+  method: 'post', path: '/api/chores/{id}/pauses', tags: ['Chores'], security: [{ Bearer: [] }],
+  summary: 'Pause a chore from startDate to endDate, both included (parent only). Past days can be included: they stop being late or missed.',
+  request: { params: z.object({ id: z.string() }), body: { content: { 'application/json': { schema: z.object({ startDate: MealDateSchema, endDate: MealDateSchema }) } } } },
+  responses: {
+    201: { description: 'paused', content: { 'application/json': { schema: ChorePauseSchema } } },
+    400: { description: 'invalid dates, or a chore that cannot be paused', content: { 'application/json': { schema: ErrorSchema } } },
+    404: { description: 'not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+}), async c => {
+  const { id } = c.req.valid('param');
+  const { startDate, endDate } = c.req.valid('json');
+  const chore = await c.env.DB.prepare(`SELECT * FROM chores WHERE ${schoolworkVisibleSql()} AND id = ?`).bind(id).first<ChoreRow>();
+  if (!chore) return c.json({ error: 'not found' }, 404);
+  if (endDate < startDate) return c.json({ error: stored('error', 'The last paused day is before the first.') }, 400);
+  if (chore.ongoing || chore.source_id) return c.json({ error: stored('error', "This chore can't be paused.") }, 400);
+  const pauseId = crypto.randomUUID();
+  await c.env.DB.prepare('INSERT INTO chore_pauses (id, chore_id, start_date, end_date, created_at) VALUES (?, ?, ?, ?, ?)').bind(pauseId, id, startDate, endDate, new Date().toISOString()).run();
+  emit(c, 'chore.changed', { id });
+  return c.json(pauseToApi({ id: pauseId, chore_id: id, start_date: startDate, end_date: endDate, title: chore.title, emoji: chore.emoji, member_id: chore.member_id }), 201);
+});
+
+choresRoutes.openapi(createRoute({
+  method: 'delete', path: '/api/chores/{id}/pauses/{pauseId}', tags: ['Chores'], security: [{ Bearer: [] }],
+  summary: 'Remove a chore pause (parent only). Its days are due again, and past ones can turn up late.',
+  request: { params: z.object({ id: z.string(), pauseId: z.string() }) },
+  responses: {
+    200: { description: 'ok', content: { 'application/json': { schema: z.object({ ok: z.literal(true) }) } } },
+    404: { description: 'not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+}), async c => {
+  const { id, pauseId } = c.req.valid('param');
+  const gone = await c.env.DB.prepare('DELETE FROM chore_pauses WHERE id = ? AND chore_id = ? RETURNING id').bind(pauseId, id).first<{ id: string }>();
+  if (!gone) return c.json({ error: 'not found' }, 404);
+  emit(c, 'chore.changed', { id });
   return c.json({ ok: true as const }, 200);
 });

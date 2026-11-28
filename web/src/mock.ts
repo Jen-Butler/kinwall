@@ -33,6 +33,8 @@ const uid = () => crypto.randomUUID()
 const todayISO = () => dateKey(new Date()) // the local day, like the app's (not UTC's, a day ahead in a US evening)
 
 const choreDismissals = new Set<string>()
+const chorePauses: { id: string; choreId: string; startDate: string; endDate: string }[] = []
+const chorePaused = (id: string, date: string) => chorePauses.some(p => p.choreId === id && p.startDate <= date && date <= p.endDate)
 let rev = 1
 const checkIns = new Set<string>() // `${memberId}:${date}` - the demo's daily check-ins
 const tempChecks = new Map<string, Omit<TempCheck, 'settings' | 'private' | 'custom' | 'answered' | 'followupOpen' | 'drainedOpen' | 'lastNight'>>() // `${memberId}:${date}`
@@ -1455,7 +1457,7 @@ export const mock = {
     const counts: ChoreDateCount[] = []
     for (let date = from; date <= to; date = new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)) {
       const grouped = new Map<string | null, ChoreDateCount>()
-      for (const c of chores.filter(c => schoolworkVisible(c) && c.active && (c.sourceId ? completions.has(`${c.id}:${date}`) : dueOn(c, date)))) {
+      for (const c of chores.filter(c => schoolworkVisible(c) && c.active && !chorePaused(c.id, date) && (c.sourceId ? completions.has(`${c.id}:${date}`) : dueOn(c, date)))) {
         const comp = completions.get(`${c.id}:${date}`)
         if (!comp && mockGoalProgress(c, date)?.full) continue
         const count = grouped.get(c.memberId) ?? { date, memberId: c.memberId, total: 0, remaining: 0, pending: 0, dismissed: 0 }
@@ -1471,7 +1473,7 @@ export const mock = {
   },
   getChoresDay: async (date: string): Promise<ChoreDay[]> => {
     const plugins = await installedPlugins()
-    return chores.filter(c => schoolworkVisible(c) && c.active && (c.sourceId ? completions.has(`${c.id}:${date}`) : c.ongoing ? date >= (c.dueDate ?? dateKey(new Date())) : dueOn(c, date))).map(c => {
+    return chores.filter(c => schoolworkVisible(c) && c.active && !chorePaused(c.id, date) && (c.sourceId ? completions.has(`${c.id}:${date}`) : c.ongoing ? date >= (c.dueDate ?? dateKey(new Date())) : dueOn(c, date))).map(c => {
       const comp = completions.get(`${c.id}:${date}`)
       const list = c.listId ? lists.find(l => l.id === c.listId) : undefined
       const its = list ? listItems.filter(i => i.listId === list.id && (!c.memberId || !i.memberId || i.memberId === c.memberId)) : []
@@ -1544,6 +1546,23 @@ export const mock = {
     const key = `${id}:${date}`
     if (dismissed) choreDismissals.add(key); else choreDismissals.delete(key)
     rev++; return { ok: true }
+  },
+  getChorePauses: async (from: string, to: string) => chorePauses.filter(p => p.startDate <= to && p.endDate >= from).flatMap(p => {
+    const c = chores.find(x => x.id === p.choreId)
+    return c ? [{ ...p, title: c.title, emoji: c.emoji ?? null, memberId: c.memberId }] : []
+  }).sort((a, b) => a.startDate.localeCompare(b.startDate)),
+  addChorePause: async (id: string, body: { startDate: string; endDate: string }) => {
+    const c = chores.find(x => x.id === id)
+    if (!c) throw new ApiError(404, 'not found')
+    const p = { id: uid(), choreId: id, ...body }
+    chorePauses.push(p); rev++
+    return { ...p, title: c.title, emoji: c.emoji ?? null, memberId: c.memberId }
+  },
+  removeChorePause: async (_id: string, pauseId: string) => {
+    const i = chorePauses.findIndex(p => p.id === pauseId)
+    if (i < 0) throw new ApiError(404, 'not found')
+    chorePauses.splice(i, 1); rev++
+    return { ok: true as const }
   },
   completeChore: async (id: string, date: string, memberId?: string) => {
     let c = chores.find(x => x.id === id)
@@ -2330,7 +2349,7 @@ function mockBoard(days: number): Board {
     }),
     // Like the server: a one-off past its day, or a repeating chore's last time before today (not a goal), in the last 7 days.
     overdueChores: !settings.features.chores ? [] : chores.filter(c => !c.schoolKind && c.active).flatMap(c => {
-      const date = !c.rrule ? c.dueDate : c.repeatGoal ? null : [1, 2, 3, 4, 5, 6, 7].map(n => inDays(-n)).find(d => dueOn(c, d))
+      const date = !c.rrule ? c.dueDate : c.repeatGoal ? null : [1, 2, 3, 4, 5, 6, 7].map(n => inDays(-n)).find(d => dueOn(c, d) && !chorePaused(c.id, d))
       return date && date >= inDays(-7) && date < today && !completions.has(`${c.id}:${date}`) && !choreDismissals.has(`${c.id}:${date}`) ? [{ id: c.id, title: c.title, emoji: c.emoji, memberId: c.memberId, points: c.points, date }] : []
     }).sort((a, b) => a.date.localeCompare(b.date)),
     birthdays,

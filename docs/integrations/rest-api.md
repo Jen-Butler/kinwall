@@ -608,6 +608,16 @@ counts it as `dismissed` instead of `remaining`, and completing it later clears 
 Repeating the same request has the same result. Dismissals are included in JSON backups as
 `choreDismissals`; old backups without that field still import.
 
+`POST /api/chores/{id}/pauses` with `{startDate, endDate}` (both `YYYY-MM-DD`, both included)
+pauses one chore without marking anyone away. On paused days the chore is left out of
+`GET /api/chores/day`, `GET /api/chores/counts` and the Board's `overdueChores`, streaks skip
+them, and `POST /api/chores/{id}/complete` for such a day returns `400`. Past days can be
+included. `GET /api/chores/pauses?from=&to=` lists the pauses that touch a range, each with its
+chore's `title`, `emoji` and `memberId`, and `DELETE /api/chores/{id}/pauses/{pauseId}` removes
+one. All three are parent/full access only; wall screens and kids' devices get `403`. An ongoing
+responsibility returns `400`. Adding or removing a pause sends the `chore.changed` webhook.
+Pauses are included in JSON backups as `chorePauses`; old backups without that field still import.
+
 ## Trips and away days
 
 [Trips](../using/trips.md) starts off (`features.trips` is `false`). While it's off, `/api/trips`

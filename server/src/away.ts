@@ -17,10 +17,17 @@ export type AwayPerson = {
   start_date: string;
   end_date: string;
 };
+/** A chore's own break (chore_pauses): excused on those days, with nobody away. */
+export type ChorePause = {
+  chore_id: string;
+  start_date: string;
+  end_date: string;
+};
 export function awayContext(
   people: AwayPerson[],
   rules: AwayRule[],
   memberIds: string[],
+  pauses: ChorePause[] = [],
 ) {
   const isAway = (memberId: string, date: string) =>
     people.some(
@@ -32,7 +39,11 @@ export function awayContext(
       (r) =>
         r.chore_id === row.id && r.start_date <= date && r.end_date >= date,
     );
-  const duty = (
+  const paused = (row: Pick<ChoreRow, 'id'>, date: string) =>
+    pauses.some(
+      (p) => p.chore_id === row.id && p.start_date <= date && p.end_date >= date,
+    );
+  const awayDuty = (
     row: Pick<ChoreRow, 'id' | 'member_id' | 'eligible_member_ids'>,
     date: string,
   ) => {
@@ -77,9 +88,18 @@ export function awayContext(
       handoff: null,
     };
   };
+  // A paused chore is excused whoever has it that day; everything else is as away days decide.
+  const duty = (
+    row: Pick<ChoreRow, 'id' | 'member_id' | 'eligible_member_ids'>,
+    date: string,
+  ) => {
+    const d = awayDuty(row, date);
+    return paused(row, date) ? { ...d, excused: true, paused: true } : { ...d, paused: false };
+  };
   return {
     people,
     rules,
+    pauses,
     isAway,
     duty,
     forMember: (
@@ -151,10 +171,16 @@ export function awayStatements(db: KinwallDb, from: string, to: string) {
       .bind(to, from),
     db.prepare('SELECT id FROM members'),
     db.prepare(AWAY_VERSION_SQL),
+    db
+      .prepare(
+        'SELECT chore_id, start_date, end_date FROM chore_pauses WHERE start_date <= ? AND end_date >= ?',
+      )
+      .bind(to, from),
   ];
 }
 // Conservative across periods, but entirely metadata: saves/imports advance revisions atomically.
-export const AWAY_VERSION_SQL="SELECT json_group_array(json_object('id',id,'revision',revision)) AS version FROM (SELECT id,revision FROM away_periods ORDER BY id)";
+// Chore pauses count too: a pause added or removed between a read and a tick changes the duty.
+export const AWAY_VERSION_SQL="SELECT json_group_array(json_object('id',id,'revision',revision)) AS version FROM (SELECT id,revision FROM away_periods UNION ALL SELECT id,0 AS revision FROM chore_pauses ORDER BY id)";
 export function awayFromResults(
   results: { results: unknown[] }[],
 ): AwayContext {
@@ -162,6 +188,7 @@ export function awayFromResults(
     results[0].results as AwayPerson[],
     results[1].results as AwayRule[],
     (results[2].results as { id: string }[]).map((v) => v.id),
+    (results[4]?.results ?? []) as ChorePause[],
   );
 }
 export async function loadAway(

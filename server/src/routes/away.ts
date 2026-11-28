@@ -187,6 +187,7 @@ async function review(c: C, input: AwayInput) {
     ],
     existing.rules.filter((r) => r.period_id !== input.id),
     members,
+    existing.pauses,
   );
   const handoffs: Period['handoffs'] = [];
   const rules: AwayRule[] = [];

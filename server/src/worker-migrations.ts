@@ -1,4 +1,5 @@
 import m0159 from '../migrations/0159_trip_care.sql';
+import m0159a from '../migrations/0159a_chore_pauses.sql';
 import m0158 from '../migrations/0158_trips_away.sql';
 import m0149 from '../migrations/0149_chore_dismissals.sql';
 import m0150 from '../migrations/0150_school.sql';
@@ -321,4 +322,5 @@ export const MIGRATIONS: Migration[] = [
   { name: '0157_recipe_tags.sql', sql: m0157 },
   { name: '0158_trips_away.sql', sql: m0158 },
   { name: '0159_trip_care.sql', sql: m0159 },
+  { name: '0159a_chore_pauses.sql', sql: m0159a },
 ];
