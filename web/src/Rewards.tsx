@@ -501,11 +501,9 @@ function RewardEditSheet({ reward, start, onClone, onClose, onSaved }: { reward:
           <button className="btn btn-primary" onClick={() => save()} disabled={!valid}>{reward ? t('Save') : t('Add reward')}</button>
         </>
       }>
-      {reward && (
-        <div className="reward-edit-actions" role="group" aria-label={t('Reward actions')}>
-          {onClone && <button type="button" className="btn btn-secondary" title={t('Start a new reward as a copy of this one')} onClick={clone}><span aria-hidden="true">📄</span> {t('Clone')}</button>}
-          <button type="button" className="btn btn-secondary" title={reward.active ? t('Hide it from everyone and keep it for history') : t('Bring it back to the rewards list')} onClick={() => save({ active: !reward.active })} disabled={!valid}><span aria-hidden="true">{reward.active ? '📦' : '↩️'}</span> {reward.active ? t('Archive') : t('Restore')}</button>
-          <button type="button" className="btn btn-danger" title={t('Delete it for good. Past requests stay in history.')} onClick={del}><span aria-hidden="true">🗑️</span> {t('Delete')}</button>
+      {reward && onClone && (
+        <div className="reward-edit-actions">
+          <button type="button" className="btn btn-secondary" title={t('Start a new reward as a copy of this one')} onClick={clone}><span aria-hidden="true">📄</span> {t('Clone')}</button>
         </div>
       )}
       <div className="field">
@@ -557,6 +555,12 @@ function RewardEditSheet({ reward, start, onClone, onClose, onSaved }: { reward:
         )}
         <p className="field-hint">{t("For each person. Requests you say not this time to don't count.")}</p>
       </div>
+      {reward && (
+        <div className="sheet-danger-zone">
+          <button className="link-btn" onClick={() => save({ active: !reward.active })} disabled={!valid}>{reward.active ? t('Archive reward') : t('Restore reward')}</button>
+          <button className="link-btn link-danger" onClick={del}>{t('Delete reward')}</button>
+        </div>
+      )}
     </Sheet>
   )
 }

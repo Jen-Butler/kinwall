@@ -1396,7 +1396,7 @@ button.month-cell .month-daynum { flex: none; }
 .text-link { color: var(--accent-text); font-weight: 800; }
 .link-btn { background: none; border: none; color: var(--accent-text); font-weight: 800; font-size: 0.8125rem; padding: 6px 2px; min-height: 44px; }
 /* Delete, Archive, Remove: at the bottom of a sheet's body, away from its Save (AGENTS.md). */
-/* A reward's own actions (Clone, Archive, Delete), as buttons above its fields. */
+/* Clone, a button above a reward's fields. Archive and Delete stay at the bottom (.sheet-danger-zone). */
 .reward-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .reward-edit-actions .btn { flex: none; }
 .sheet-danger-zone { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 24px; margin-top: 20px; padding-top: 8px; border-top: 1px solid var(--border); }
