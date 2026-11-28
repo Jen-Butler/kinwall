@@ -230,6 +230,16 @@ Some jobs don't fit a schedule: clean out the car, wash the windows, flip the ma
 
 "Last done" counts chores made from the library item and approved, so a tick still waiting for a parent's OK doesn't count yet. Wall screens and kids' devices can't open or change the library, but they do the chores handed out from it as usual. The library is included in [export and import](../your-data/export-import.md).
 
+## Pausing a chore
+
+Sometimes one chore takes a break while everything else carries on: no homework over a holiday week, or the teacher didn't set any, while the bed still gets made. On a parent's device, tap **✏️ Edit chores**, then the chore, and pick **More… → Pause for some days…**. Choose the **First day** and **Last day** and tap **Pause**.
+
+* On paused days the chore isn't due. It isn't in the day's list, doesn't count as left, and can't be ticked off.
+* A paused day never shows up late, and streaks skip it. Days already past can be included, which clears a miss from earlier in the week.
+* Nobody is marked away: the person's other chores, the calendar and the leaderboard are unchanged. For someone who really is away, use [away days](#away-days).
+* While a chore is paused, a parent's device shows a note above that day's chores ("⏸ Homework is paused: Mon, Nov 23 – Fri, Nov 27"). Tap **Change** on it to add another pause or **Remove** one. Removing a pause makes its days due again, and past ones can show up late.
+* A chore for several people is paused one copy at a time, so one child's homework can pause while a sibling's carries on. **Anyone** chores can be paused too. Ongoing responsibilities can't.
+
 ## Away days
 
 When someone's away (band camp, a trip), a grown-up sets [away days](away.md) from **✈️ Away days** at the top of Chores. Their own chores pause on those days, stay due, or go to someone at home for a while ("From Maya until Tue" on the recipient's list) and come back afterward. Nothing piles up as late when they're back. While someone's away, the leaderboard marks them ✈️ **Away**.

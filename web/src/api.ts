@@ -21,7 +21,7 @@ import type { UpkeepArea, UpkeepDoneInput, UpkeepEntry, UpkeepFile, UpkeepJob, U
 import type { Outing, OutingCategory, OutingFeed, OutingFeedInput, OutingIdeas, OutingInput, OutingPile, Poll, PollInput, ChoreSuggestion, ChoreSuggestionAnswer, ChoreSuggestionInput, TaskAccount, TaskAppList, TaskLink, PantrySuggestions } from './types.ts'
 import type { ActivityInput, AwayInput, CareInput, AwayPeriod, AwayReview, CalendarPublish, DateChangePreview, LegInput, LinkInput, LinkPreview, StayGroupInput, StayOptionInput, StopInput, Trip, TripInput, TripLinkRef, TripSummary } from './trip-types.ts'
 import type { Contact, ContactCategory, ContactInput, ImportPreviewEntry } from './contact-types.ts'
-import type { ActivityChoreProgress, OnlineTidbits, Plugin, PluginActionItem, PluginCatalogEntry,
+import type { ChorePause, ActivityChoreProgress, OnlineTidbits, Plugin, PluginActionItem, PluginCatalogEntry,
   Milestone, MilestoneInput, StickerPack, StickerPatch, StickerPlacement, Photo, PhotoQuota, FamilyColoringPage, GooglePhotos, Reward, Redemption, RewardShare, PointAward, PointEntry, MemberStats, StatsPeriod,
   Account, ApiKey, AppNotification, Appearance, CalendarEntry, Category, Chore, ChoreDay, ChoreDateCount, LibraryChore, LibraryChoreInput, PendingApproval, EventInstance, LeaderboardEntry, LeaderboardPeriod, List,
   BarcodeLookup, BookResult, GeocodeResult, LibraryBook, LibraryBookInput, HiddenEvent, HostEvent, ImportResult, SecurityEvent, ListDetail, ListGroup, ListItem, ListItemInput, ListItemPatch, Member, Me, Note, NoteTarget, Passkey, TrackerEntry, TrackerInput, TrackerKind, Providers, PushSubscription, PushSubscriptionPrefs, RemoteCalendar, Settings, Snapshot, Board, Webhook, WebhookWithSecret,
@@ -707,6 +707,10 @@ export const api = {
   assignLibraryChore: (id: string, body: { date: string; memberId?: string | null; memberIds?: string[]; oneOf?: boolean; rrule?: string | null }) => MOCK ? mock.assignLibraryChore(id, body) : post<Chore>(`api/chore-library/${id}/assign`, body),
   setChoreDismissed: (id: string, date: string, dismissed: boolean) =>
     MOCK ? mock.setChoreDismissed(id, date, dismissed) : put(`./api/chores/${encodeURIComponent(id)}/dismissal`, { date, dismissed }),
+  // A chore's own break (parent devices): not due on those days, with nobody away.
+  getChorePauses: (from: string, to: string) => MOCK ? mock.getChorePauses(from, to) : get<ChorePause[]>('api/chores/pauses?' + new URLSearchParams({ from, to })),
+  addChorePause: (id: string, body: { startDate: string; endDate: string }) => MOCK ? mock.addChorePause(id, body) : post<ChorePause>('api/chores/' + encodeURIComponent(id) + '/pauses', body),
+  removeChorePause: (id: string, pauseId: string) => MOCK ? mock.removeChorePause(id, pauseId) : del<{ ok: true }>('api/chores/' + encodeURIComponent(id) + '/pauses/' + encodeURIComponent(pauseId)),
   completeChore: (id: string, date: string, memberId?: string) =>
     MOCK ? mock.completeChore(id, date, memberId) : post(`api/chores/${id}/complete`, { date, memberId, operationId: crypto.randomUUID() }),
   uncompleteChore: (id: string, date: string) =>

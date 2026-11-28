@@ -457,6 +457,9 @@ export const CATEGORY_PRESETS: { name: string; emoji: string; keywords: string[]
   { name: msg('Travel'), emoji: '✈️', keywords: ['flight', 'trip', 'hotel', 'vacation'] },
 ]
 
+/** A chore's own break: not due from startDate to endDate (both included), with nobody away. */
+export interface ChorePause { id: string; choreId: string; startDate: string; endDate: string; title: string; emoji: string | null; memberId: string | null }
+
 export interface Chore {
   category?: string | null
   ongoing?: boolean

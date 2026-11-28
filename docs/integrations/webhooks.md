@@ -24,7 +24,7 @@ URLs must be public `http(s)` addresses. Private and LAN addresses are refused, 
 | `calendar.synced` | A calendar finished syncing and something changed, or you pressed Sync now (includes `error` on failure; a background sync repeating the same error doesn't send it again). |
 | `events.changed` | Events were created, edited or deleted, including by a sync that brought in changes. |
 | `trip.changed` | A [trip](../using/trips.md), one of its parts or someone's 👀 / ⭐ on it was added, changed or deleted, or it was added to a calendar. `data`: `{ id }` (an import sends `{ imported }`), never booking details. Starting a stay vote also sends `poll.changed`. |
-| `chore.changed` | A chore is added, edited or deleted, or a parent resets the play time of an [activity chore](../using/chores.md#activity-chores). |
+| `chore.changed` | A chore is added, edited or deleted, a parent resets the play time of an [activity chore](../using/chores.md#activity-chores), or a chore is [paused for some days](../using/chores.md#pausing-a-chore) or the pause is removed. |
 | `chore.dismissal.changed` | A parent dismisses a late date as not done or restores it. `data`: `{ choreId, date, dismissed }`. No points or completion event. |
 | `chore.completed` | A chore is marked done for a date (for a chore that needs a parent's OK, when it's approved). `data`: `{ id, date, title, memberId, points }`. `memberId` is who gets the credit (for an Anyone chore, the person it was ticked off for, or `null`), and `points` is what was awarded, so late completions show the reduced amount. |
 | `chore.uncompleted` | A completion is undone. `data`: `{ id, date, title, memberId }`. |

@@ -12,7 +12,7 @@ import { useIsPhone } from './useIsPhone.ts'
 import { useApp } from './AppContext.tsx'
 import { actingMember } from './actingAs.ts'
 import { api, ApiError } from './api.ts'
-import type { Chore, ChoreDay, ChoreDateCount, ChoreSuggestion, LeaderboardEntry, LeaderboardPeriod, List, PendingApproval, Plugin, Redemption } from './types.ts'
+import type { Chore, ChoreDay, ChoreDateCount, ChorePause, ChoreSuggestion, LeaderboardEntry, LeaderboardPeriod, List, PendingApproval, Plugin, Redemption } from './types.ts'
 import { MEMBER_EMOJI, rewardsOn } from './types.ts'
 import { dateKey, todayKeyInTz } from './date.ts'
 import Sheet from './Sheet.tsx'
@@ -25,6 +25,8 @@ import { IDLE_RESET_EVENT } from './App.tsx'
 import { announce } from './a11y.tsx'
 import { useDialog } from './dialog.tsx'
 import { ChoreLibrarySheet, type RepeatDraft } from './ChoreLibrary.tsx'
+import { ChorePauseSheet } from './ChorePause.tsx'
+import { pauseDays, pausesOn } from './chorePause.ts'
 import GetStuffDone from './GetStuffDone.tsx'
 import { intervalRrule } from './choreLibrary.ts'
 import { rruleToForm, scheduleBody, scheduleDates, scheduleText, validSchedule } from './choreSchedule.ts'
@@ -513,6 +515,18 @@ export default function Chores() {
     return () => { canceled = true }
   }, [refreshTick])
   const awayNow = members.map(m => ({ m, until: awayUntil(away, m.id, key) })).filter(x => x.until && (!selectedMemberId || x.m.id === selectedMemberId))
+  // Chores on a break that day (More… → Pause for some days…): a parent's device says which, since
+  // a paused chore isn't in the day's list to tap.
+  const [pauses, setPauses] = useState<ChorePause[]>([])
+  const [pauseTick, setPauseTick] = useState(0)
+  const [pauseFor, setPauseFor] = useState<{ id: string; title: string; emoji?: string | null } | null>(null)
+  useEffect(() => {
+    if (!parentDevice) { setPauses([]); return }
+    let canceled = false
+    api.getChorePauses(key, key).then(x => { if (!canceled) setPauses(x) }).catch(() => { /* say nothing */ })
+    return () => { canceled = true }
+  }, [key, refreshTick, pauseTick, parentDevice])
+  const pausedNow = pausesOn(pauses, key).filter(p => !selectedMemberId || !p.memberId || p.memberId === selectedMemberId)
   // Loading only while a new day's chores are on their way. A refresh of the same day (a sheet
   // saved, the rev moved) keeps what's on screen, so the columns don't collapse and jump back.
   const loading = loadedKey !== key
@@ -530,7 +544,7 @@ export default function Chores() {
   useEffect(() => load(false), [key, refreshTick])
 
   useEffect(() => {
-    const onIdle = () => { setSelectedDate(new Date()); setEditChore(null); setSchoolwork(null); setEditing(false); setChecklistId(null); setLibraryOpen(false); setRepeatDraft(null); setSuggestFor(null) }
+    const onIdle = () => { setSelectedDate(new Date()); setEditChore(null); setSchoolwork(null); setEditing(false); setChecklistId(null); setLibraryOpen(false); setRepeatDraft(null); setSuggestFor(null); setPauseFor(null) }
     window.addEventListener(IDLE_RESET_EVENT, onIdle)
     return () => window.removeEventListener(IDLE_RESET_EVENT, onIdle)
   }, [])
@@ -702,6 +716,7 @@ export default function Chores() {
         {rewardsShown && <a className="btn btn-secondary chores-rewards-btn" href={selectedMemberId ? `#/rewards/${selectedMemberId}` : '#/rewards'}><span aria-hidden="true">🎁</span> <span className="chores-rewards-label">{t('Rewards')}</span><span className="chores-short-label">{t('Rewards')}</span></a>}
       </div>
       {awayNow.length > 0 && <p className="state-card chores-away" role="note">{awayNow.map(x => t('✈️ {name} is away until {day}. Their chores wait until they’re back.', { name: x.m.name, day: formatDate(new Date(`${x.until}T12:00:00`), DAY) })).join(' ')}</p>}
+      {pausedNow.map(p => <p key={p.id} className="state-card chores-away" role="note">{t('⏸ {title} is paused: {days}.', { title: p.title, days: pauseDays(p) })} <button type="button" className="link-btn" onClick={() => setPauseFor({ id: p.choreId, title: p.title, emoji: p.emoji })}>{t('Change')}</button></p>)}
       <div className="date-strip" role="group" aria-label={t('Day')}>
         {strip.map(d => {
           const day = dateKey(d)
@@ -837,6 +852,7 @@ export default function Chores() {
         <GetStuffDone listId={checklistFor.checklist.listId} onClose={() => { setChecklistId(null); load() }}
           chore={{ memberId: checklistFor.memberId, title: checklistFor.title, points: checklistFor.points, done: checklistDone(checklistFor), onComplete: () => { const c = checklistFor; void toggle({ ...c, checklist: null }) } }} />
       )}
+      {pauseFor && parentDevice && <ChorePauseSheet chore={pauseFor} day={key} today={today} onClose={() => setPauseFor(null)} onChanged={() => { setPauseTick(n => n + 1); load(); reloadCore() }} />}
       {libraryOpen && parentDevice && (
         <ChoreLibrarySheet onClose={() => setLibraryOpen(false)}
           onAssigned={date => { if (date !== key) setSelectedDate(new Date(`${date}T00:00:00`)); load(); reloadCore() }}
@@ -847,6 +863,7 @@ export default function Chores() {
           chore={editChore && editChore !== 'new' ? editChore : null}
           draft={repeatDraft}
           resetTime={resetMember && editDay ? { label: isToday ? t("Reset today's time…") : t("Reset this day's time…"), run: () => void resetTime(editDay, resetMember) } : undefined}
+          onPause={c => { setEditChore(null); setPauseFor({ id: c.id, title: c.title, emoji: c.emoji }) }}
           onClose={() => { setEditChore(null); setRepeatDraft(null) }}
           onSaved={first => {
             setEditChore(null); setRepeatDraft(null)
@@ -862,7 +879,7 @@ export default function Chores() {
 
 /** Add or edit a chore. `draft` (the library's "Make it repeat") fills a new chore from a library
  * item, repeating at its "about every" interval from the picked day. */
-function ChoreEditSheet({ chore, draft, resetTime, onClose, onSaved }: { chore: Chore | null; draft?: RepeatDraft | null; resetTime?: { label: string; run: () => void }; onClose: () => void; onSaved: (firstDate?: Date) => void }) {
+function ChoreEditSheet({ chore, draft, resetTime, onPause, onClose, onSaved }: { chore: Chore | null; draft?: RepeatDraft | null; resetTime?: { label: string; run: () => void }; onPause?: (chore: Chore) => void; onClose: () => void; onSaved: (firstDate?: Date) => void }) {
   const dialog = useDialog()
   const { members, toast, settings } = useApp()
   const [repeatGoal, setRepeatGoal] = useState<ChoreGoal | null>(chore?.repeatGoal ?? null)
@@ -940,10 +957,11 @@ function ChoreEditSheet({ chore, draft, resetTime, onClose, onSaved }: { chore: 
     <Sheet title={chore ? t('Edit chore') : draft ? t('Make it repeat') : t('New chore')} onClose={onClose} dirty="auto"
       actions={
         <>
-          {chore && <select className="settings-select actions-select" aria-label={t('Chore actions')} value="" onChange={e => { if (e.target.value === 'delete') void del(); if (e.target.value === 'library') void saveToLibrary(); if (e.target.value === 'reset') resetTime?.run() }}>
+          {chore && <select className="settings-select actions-select" aria-label={t('Chore actions')} value="" onChange={e => { if (e.target.value === 'delete') void del(); if (e.target.value === 'library') void saveToLibrary(); if (e.target.value === 'reset') resetTime?.run(); if (e.target.value === 'pause') onPause?.(chore) }}>
             <option value="" disabled hidden>{t('More…')}</option>
             {!chore.libraryId && <option value="library">{t('Save to library')}</option>}
             {resetTime && <option value="reset">{resetTime.label}</option>}
+            {onPause && !chore.ongoing && !chore.sourceId && <option value="pause">{t('Pause for some days…')}</option>}
             <option value="delete">{t('Delete chore…')}</option>
           </select>}
           <button className="btn btn-primary" onClick={submit} disabled={!title.trim() || !isSingleEmoji(emoji) || !scheduleValid || !groupLoaded}>{chore ? t('Save') : t('Add chore')}</button>
