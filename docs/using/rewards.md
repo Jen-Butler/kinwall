@@ -39,7 +39,7 @@ On a parent's device, open Rewards and tap **Manage rewards** at the top (or a s
 | **Needs a parent's OK** | **Yes** (the default) or **No**, the same menu as a chore's. With **Yes**, redeeming on a wall screen or kid's device waits for a parent (see below). With **No**, it's approved as soon as it's redeemed. |
 | **Limit** | **No limit**, or **Up to** a number (1 to 20) **a day** or **a week**, for each person. "📺 15 min screen time, up to 3 a day." |
 
-Tap a reward in **Manage rewards** to edit it. At the bottom, **Archive reward** hides it from everyone but keeps it for history; **Restore reward** brings it back. **Delete reward** removes it after you confirm; past requests stay in everyone's history.
+Tap a reward in **Manage rewards** to edit it. Its actions are buttons at the top of the sheet. **Clone** starts a new reward as a copy of the one on screen, named "… copy", for you to change and add; nothing is saved until you tap **Add reward**. **Archive** hides it from everyone but keeps it for history; **Restore** brings it back. **Delete** removes it after you confirm; past requests stay in everyone's history.
 
 Wall screens and kids' devices can't add, edit or remove rewards.
 

@@ -19,6 +19,7 @@ import { evenSplit, movePoints, shareText } from './rewardSplit.ts'
 import { PointsStepper } from './ChoreSuggest.tsx'
 import { MinusIcon, PlusIcon } from './icons.tsx'
 import { DAY, formatDate, intlLocale, msg, t, tc, tm, tn } from './i18n.ts'
+import { cloneTitle } from './rewardClone.ts'
 import { rich } from './rich.tsx'
 
 const rewardLabel = (r: { emoji: string | null; title: string }) => (r.emoji ? `${r.emoji} ${r.title}` : r.title)
@@ -432,13 +433,14 @@ function RewardsManageSheet({ onClose }: { onClose: () => void }) {
   const { members, toast, refreshTick } = useApp()
   const [all, setAll] = useState<Reward[]>([])
   const [editing, setEditing] = useState<Reward | 'new' | null>(null)
+  const [cloneOf, setCloneOf] = useState<Partial<Reward> | null>(null) // a new reward that starts as a copy
   const load = () => { api.getRewards({ archived: true }).then(setAll).catch(() => toast(t("Couldn't load rewards."), true)) }
   useEffect(load, [refreshTick]) // eslint-disable-line react-hooks/exhaustive-deps
   const forWho = (r: Reward) => r.memberIds.length ? r.memberIds.map(id => members.find(m => m.id === id)?.name).filter(Boolean).join(', ') : t('Everyone')
   const limitText = (r: Reward) => !r.limit ? '' : r.limit.period === 'day' ? t('up to {n} a day', { n: r.limit.count }) : t('up to {n} a week', { n: r.limit.count })
   return (
     <>
-      <Sheet title={t('Rewards')} onClose={onClose} actions={<button className="btn btn-primary" onClick={() => setEditing('new')}>{t('Add reward')}</button>}>
+      <Sheet title={t('Rewards')} onClose={onClose} actions={<button className="btn btn-primary" onClick={() => { setCloneOf(null); setEditing('new') }}>{t('Add reward')}</button>}>
         {all.length === 0 && <p className="snap-empty">{t('No rewards yet. Add a few things worth saving up for.')}</p>}
         <ul className="snap-list">
           {all.map(r => (
@@ -454,24 +456,26 @@ function RewardsManageSheet({ onClose }: { onClose: () => void }) {
           ))}
         </ul>
       </Sheet>
-      {editing && <RewardEditSheet reward={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
+      {editing && <RewardEditSheet key={editing === 'new' ? `new:${cloneOf?.title ?? ''}` : editing.id} reward={editing === 'new' ? null : editing} start={editing === 'new' ? cloneOf : null}
+        onClone={copy => { setCloneOf(copy); setEditing('new') }} onClose={() => { setEditing(null); setCloneOf(null) }} onSaved={() => { setEditing(null); setCloneOf(null); load() }} />}
     </>
   )
 }
 
 const REWARD_EMOJI = ['🍿', '🍦', '📺', '🎮', '🌙', '🍕', '🎨', '🏞️', '🧸', '💵']
 
-function RewardEditSheet({ reward, onClose, onSaved }: { reward: Reward | null; onClose: () => void; onSaved: () => void }) {
+function RewardEditSheet({ reward, start, onClone, onClose, onSaved }: { reward: Reward | null; start?: Partial<Reward> | null; onClone?: (copy: Partial<Reward>) => void; onClose: () => void; onSaved: () => void }) {
   const { members, toast } = useApp()
   const dialog = useDialog()
-  const [title, setTitle] = useState(reward?.title ?? '')
-  const [emoji, setEmoji] = useState(reward?.emoji ?? REWARD_EMOJI[0])
-  const [cost, setCost] = useState(reward?.cost ?? 20)
-  const [memberIds, setMemberIds] = useState<string[]>(reward?.memberIds ?? [])
-  const [needsApproval, setNeedsApproval] = useState(reward?.needsApproval ?? true)
-  const [limited, setLimited] = useState(!!reward?.limit)
-  const [count, setCount] = useState(reward?.limit?.count ?? 1)
-  const [period, setPeriod] = useState<RewardLimit['period']>(reward?.limit?.period ?? 'week')
+  const from = reward ?? start // a new reward can start as a copy of another (Clone)
+  const [title, setTitle] = useState(from?.title ?? '')
+  const [emoji, setEmoji] = useState(from?.emoji ?? REWARD_EMOJI[0])
+  const [cost, setCost] = useState(from?.cost ?? 20)
+  const [memberIds, setMemberIds] = useState<string[]>(from?.memberIds ?? [])
+  const [needsApproval, setNeedsApproval] = useState(from?.needsApproval ?? true)
+  const [limited, setLimited] = useState(!!from?.limit)
+  const [count, setCount] = useState(from?.limit?.count ?? 1)
+  const [period, setPeriod] = useState<RewardLimit['period']>(from?.limit?.period ?? 'week')
   const valid = !!title.trim() && isSingleEmoji(emoji) && cost > 0
 
   const save = async (extra: Partial<Reward> = {}) => {
@@ -487,6 +491,8 @@ function RewardEditSheet({ reward, onClose, onSaved }: { reward: Reward | null; 
     try { await api.deleteReward(reward.id); onSaved() } catch (e) { toast(e instanceof ApiError ? e.message : t("Couldn't delete the reward."), true) }
   }
   const toggleMember = (id: string) => setMemberIds(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id])
+  // A copy of what's on screen, as a new reward to change and add. Nothing is saved until then.
+  const clone = () => onClone?.({ title: cloneTitle(title || reward?.title || ''), emoji, cost, memberIds, needsApproval, limit: limited ? { count: Math.min(20, Math.max(1, count)), period } : null })
 
   return (
     <Sheet title={reward ? t('Edit reward') : t('New reward')} onClose={onClose} dirty="auto"
@@ -495,6 +501,13 @@ function RewardEditSheet({ reward, onClose, onSaved }: { reward: Reward | null; 
           <button className="btn btn-primary" onClick={() => save()} disabled={!valid}>{reward ? t('Save') : t('Add reward')}</button>
         </>
       }>
+      {reward && (
+        <div className="reward-edit-actions" role="group" aria-label={t('Reward actions')}>
+          {onClone && <button type="button" className="btn btn-secondary" title={t('Start a new reward as a copy of this one')} onClick={clone}><span aria-hidden="true">📄</span> {t('Clone')}</button>}
+          <button type="button" className="btn btn-secondary" title={reward.active ? t('Hide it from everyone and keep it for history') : t('Bring it back to the rewards list')} onClick={() => save({ active: !reward.active })} disabled={!valid}><span aria-hidden="true">{reward.active ? '📦' : '↩️'}</span> {reward.active ? t('Archive') : t('Restore')}</button>
+          <button type="button" className="btn btn-danger" title={t('Delete it for good. Past requests stay in history.')} onClick={del}><span aria-hidden="true">🗑️</span> {t('Delete')}</button>
+        </div>
+      )}
       <div className="field">
         <label htmlFor="reward-title">{t('Name')}</label>
         <input id="reward-title" type="text" maxLength={80} value={title} onChange={e => setTitle(e.target.value)} placeholder={t('Movie night pick')} autoComplete="off" autoFocus={!reward} />
@@ -544,12 +557,6 @@ function RewardEditSheet({ reward, onClose, onSaved }: { reward: Reward | null; 
         )}
         <p className="field-hint">{t("For each person. Requests you say not this time to don't count.")}</p>
       </div>
-      {reward && (
-        <div className="sheet-danger-zone">
-          <button className="link-btn" onClick={() => save({ active: !reward.active })} disabled={!valid}>{reward.active ? t('Archive reward') : t('Restore reward')}</button>
-          <button className="link-btn link-danger" onClick={del}>{t('Delete reward')}</button>
-        </div>
-      )}
     </Sheet>
   )
 }
